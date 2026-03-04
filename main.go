@@ -14,6 +14,9 @@ func main() {
 	// Initialize Database
 	database.InitDB()
 
+	// Initialize Elasticsearch
+	services.InitElasticsearch()
+
 	r := gin.Default()
 
 	r.GET("/", func(c *gin.Context) {
@@ -65,7 +68,8 @@ func main() {
 			}
 		}
 
-		// TODO: Implement Elasticsearch indexing
+		// Index in Elasticsearch
+		services.IndexConversation(conv)
 
 		c.JSON(http.StatusOK, gin.H{
 			"id":             conv.ID,
@@ -81,10 +85,20 @@ func main() {
 
 	r.GET("/search", func(c *gin.Context) {
 		query := c.Query("q")
-		// TODO: Implement Elasticsearch semantic search
+		if query == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Search query 'q' is required"})
+			return
+		}
+
+		results, err := services.SearchConversations(query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed", "details": err.Error()})
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"query":   query,
-			"results": []string{},
+			"results": results,
 		})
 	})
 
