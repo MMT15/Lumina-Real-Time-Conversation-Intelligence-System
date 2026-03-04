@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package lumina;
+
+service ConversationService {
+  rpc ProcessMessage (MessageRequest) returns (MessageResponse) {}
+}
+
+message MessageRequest {
+  string user_id = 1;
+  string content = 2;
+}
+
+message MessageResponse {
+  string sentiment = 1;
+  bool ticket_created = 2;
+  string ticket_status = 3;
+}

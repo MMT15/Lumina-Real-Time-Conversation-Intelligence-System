@@ -10,8 +10,8 @@ Lumina is a "Cresta-level" conversation intelligence system designed for high-pe
 
 ## Tech Stack
 
-- **Backend**: Python (FastAPI) with gRPC support for high performance.
-- **Database**: PostgreSQL for relational data.
+- **Backend**: Go (Golang) with Gin for REST and gRPC for high performance.
+- **Database**: PostgreSQL (GORM) for relational data.
 - **Search Engine**: Elasticsearch for complex semantic queries.
 - **Containerization**: Docker & Docker Compose.
 - **AI/LLM**: Ollama (Llama 3.2:3b) for local sentiment analysis and intent detection.
@@ -31,11 +31,7 @@ Lumina is a "Cresta-level" conversation intelligence system designed for high-pe
    ```bash
    docker-compose up -d
    ```
-3. Install dependencies:
+3. Run the application:
    ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the application:
-   ```bash
-   uvicorn main:app --reload
+   go run main.go
    ```
