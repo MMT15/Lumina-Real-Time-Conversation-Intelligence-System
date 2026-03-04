@@ -1,10 +1,12 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/MMT15/Lumina/database"
 	"github.com/MMT15/Lumina/models"
+	"github.com/MMT15/Lumina/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,30 +32,50 @@ func main() {
 			return
 		}
 
-		// Create Conversation record
-		conv := models.Conversation{
-			UserID:  input.UserID,
-			Message: input.Text,
+		// AI Analysis with Ollama
+		analysis, err := services.AnalyzeSentimentAndIntent(input.Text)
+		if err != nil {
+			log.Printf("Ollama analysis failed: %v", err)
+			// Fallback if AI fails
+			analysis = &services.AIAnalysis{Sentiment: "Neutral", CreateTicket: false}
 		}
 
-		// TODO: Implement Ollama sentiment analysis
-		// For now, mock it
-		conv.Sentiment = "Neutral"
+		// Create Conversation record
+		conv := models.Conversation{
+			UserID:    input.UserID,
+			Message:   input.Text,
+			Sentiment: analysis.Sentiment,
+		}
 
 		if err := database.DB.Create(&conv).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save conversation"})
 			return
 		}
 
-		// TODO: Implement Auto-Ticket generation based on intent
+		// Auto-Ticket generation based on AI intent
+		var ticketID uint
+		if analysis.CreateTicket {
+			ticket := models.Ticket{
+				ConversationID: conv.ID,
+				Description:    analysis.TicketSummary,
+				Status:         models.StatusPending,
+			}
+			if err := database.DB.Create(&ticket).Error; err == nil {
+				ticketID = ticket.ID
+			}
+		}
+
 		// TODO: Implement Elasticsearch indexing
 
 		c.JSON(http.StatusOK, gin.H{
-			"id":        conv.ID,
-			"user_id":   conv.UserID,
-			"message":   conv.Message,
-			"sentiment": conv.Sentiment,
-			"status":    "Analysis in progress",
+			"id":             conv.ID,
+			"user_id":        conv.UserID,
+			"message":        conv.Message,
+			"sentiment":      conv.Sentiment,
+			"intent":         analysis.Intent,
+			"ticket_created": analysis.CreateTicket,
+			"ticket_id":      ticketID,
+			"status":         "Processed",
 		})
 	})
 
