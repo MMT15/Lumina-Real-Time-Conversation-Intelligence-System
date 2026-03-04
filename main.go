@@ -1,14 +1,66 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/MMT15/Lumina/database"
 	"github.com/MMT15/Lumina/models"
+	"github.com/MMT15/Lumina/pb"
 	"github.com/MMT15/Lumina/services"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
 )
+
+type server struct {
+	pb.UnimplementedConversationServiceServer
+}
+
+func (s *server) ProcessMessage(ctx context.Context, in *pb.MessageRequest) (*pb.MessageResponse, error) {
+	// AI Analysis with Ollama
+	analysis, err := services.AnalyzeSentimentAndIntent(in.Content)
+	if err != nil {
+		log.Printf("Ollama analysis failed: %v", err)
+		analysis = &services.AIAnalysis{Sentiment: "Neutral", CreateTicket: false}
+	}
+
+	// Create Conversation record
+	conv := models.Conversation{
+		UserID:    in.UserId,
+		Message:   in.Content,
+		Sentiment: analysis.Sentiment,
+	}
+
+	if err := database.DB.Create(&conv).Error; err != nil {
+		return nil, err
+	}
+
+	// Auto-Ticket generation
+	ticketCreated := false
+	ticketStatus := ""
+	if analysis.CreateTicket {
+		ticket := models.Ticket{
+			ConversationID: conv.ID,
+			Description:    analysis.TicketSummary,
+			Status:         models.StatusPending,
+		}
+		if err := database.DB.Create(&ticket).Error; err == nil {
+			ticketCreated = true
+			ticketStatus = string(models.StatusPending)
+		}
+	}
+
+	// Index in Elasticsearch
+	services.IndexConversation(conv)
+
+	return &pb.MessageResponse{
+		Sentiment:     analysis.Sentiment,
+		TicketCreated: ticketCreated,
+		TicketStatus:  ticketStatus,
+	}, nil
+}
 
 func main() {
 	// Initialize Database
@@ -16,6 +68,20 @@ func main() {
 
 	// Initialize Elasticsearch
 	services.InitElasticsearch()
+
+	// Start gRPC server in a goroutine
+	go func() {
+		lis, err := net.Listen("tcp", ":50051")
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+		s := grpc.NewServer()
+		pb.RegisterConversationServiceServer(s, &server{})
+		log.Printf("gRPC server listening at %v", lis.Addr())
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
 
 	r := gin.Default()
 
