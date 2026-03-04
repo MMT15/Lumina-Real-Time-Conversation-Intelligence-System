@@ -55,10 +55,32 @@ Return ONLY a JSON object with these keys:
 		return nil, err
 	}
 
+	content := ollamaResp.Message.Content
+	// Find the start and end of the JSON object
+	start := -1
+	end := -1
+	for i, char := range content {
+		if char == '{' {
+			start = i
+			break
+		}
+	}
+	for i := len(content) - 1; i >= 0; i-- {
+		if content[i] == '}' {
+			end = i
+			break
+		}
+	}
+
+	if start == -1 || end == -1 {
+		return nil, fmt.Errorf("no JSON object found in AI response: %s", content)
+	}
+
+	jsonStr := content[start : end+1]
 	var analysis AIAnalysis
-	err = json.Unmarshal([]byte(ollamaResp.Message.Content), &analysis)
+	err = json.Unmarshal([]byte(jsonStr), &analysis)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse AI response: %v, content: %s", err, ollamaResp.Message.Content)
+		return nil, fmt.Errorf("failed to parse AI JSON: %v, content: %s", err, jsonStr)
 	}
 
 	return &analysis, nil
