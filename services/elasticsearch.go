@@ -31,14 +31,25 @@ func InitElasticsearch() {
 	ESClient = client
 	fmt.Println("Elasticsearch connection established")
 
-	// Ensure index exists
+	// Ensure index exists with correct settings for single node
 	exists, err := client.IndexExists("conversations").Do(context.Background())
 	if err == nil && !exists {
-		_, err = client.CreateIndex("conversations").Do(context.Background())
+		mapping := `{
+			"settings": {
+				"number_of_shards": 1,
+				"number_of_replicas": 0
+			}
+		}`
+		_, err = client.CreateIndex("conversations").BodyString(mapping).Do(context.Background())
 		if err != nil {
 			log.Printf("Failed to create ES index: %v", err)
+		} else {
+			fmt.Println("Elasticsearch index 'conversations' created with 0 replicas")
 		}
 	}
+
+	// Wait for cluster health to be at least yellow
+	_, _ = client.ClusterHealth().WaitForStatus("yellow").Timeout("15s").Do(context.Background())
 }
 
 func IndexConversation(conv models.Conversation) {
